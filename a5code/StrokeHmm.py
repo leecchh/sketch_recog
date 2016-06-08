@@ -312,10 +312,13 @@ class StrokeLabeler:
 
             c = s.sumOfCurvature()
 
-            if c<0.005:
+            if c<0.2:
                 d['curvature']=0
             else:
                 d['curvature']=1
+
+            print "area:"+str(area)
+            print "ratio:"+str(ratio)
 
             # We can add more features here just by adding them to the dictionary
             # d as we did with length.  Remember that when you add features,
