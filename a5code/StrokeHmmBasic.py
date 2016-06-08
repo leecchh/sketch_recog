@@ -224,9 +224,9 @@ class StrokeLabeler:
         #    name to whether it is continuous or discrete
         # numFVals is a dictionary specifying the number of legal values for
         #    each discrete feature
-        self.featureNames = ['length', 'area', 'ratio', 'curvature']
-        self.contOrDisc = {'length': DISCRETE, 'area': DISCRETE, 'ratio': DISCRETE, 'curvature': DISCRETE}
-        self.numFVals = { 'length': 2, 'area': 2, 'ratio': 2, 'curvature': 2}
+        self.featureNames = ['length']
+        self.contOrDisc = {'length': DISCRETE}
+        self.numFVals = { 'length': 2}
 
     def confusion(self, trueLabels, classifications):
         """ Takes in trueLabels list and classifications, returns dictionary of how accurate estimation is """
@@ -279,49 +279,18 @@ class StrokeLabeler:
             # to use.  This is an important process and can be tricky.  Try
             # to use a principled approach (i.e., look at the data) rather
             # than just guessing.
-            pointList = s.points 
-            x_list = []
-            y_list = []
-            for p in pointList: #Append all points
-                x_list.append(p[0])
-                y_list.append(p[1])
-
-            x_max = max(x_list)*1.0
-            x_min = min(x_list)*1.0
-            y_max = max(y_list)*1.0
-            y_min = min(y_list)*1.0
-            area = (x_max - x_min) * (y_max - y_min)
-            ratio = (y_max - y_min) / (x_max - x_min+0.000001)
-
-            if area < 10000:
-                d['area'] = 0
-            else:
-                d['area'] = 1
-
-            if ratio < 1.25:
-                d['ratio'] = 0
-            else:
-                d['ratio'] = 1
-
             l = s.length()
-
             if l < 300:
                 d['length'] = 0
             else:
                 d['length'] = 1
-
-            c = s.sumOfCurvature()
-
-            if c<0.005:
-                d['curvature']=0
-            else:
-                d['curvature']=1
 
             # We can add more features here just by adding them to the dictionary
             # d as we did with length.  Remember that when you add features,
             # you also need to add them to the three member data structures
             # above in the contructor: self.featureNames, self.contOrDisc,
             #    self.numFVals (for discrete features only)
+
 
             ret.append(d)  # append the feature dictionary to the list
             
@@ -652,8 +621,7 @@ class Stroke:
 
         return ret / len(self.points)
 
-    # Features are defined internally within the featurefy function, not externally as a separate function. 
-    # We implemented area, ratio, and curvature for our different features
+    # You can (and should) define more features here
 
 def ViterbiExample():
     """ Part 1 Viterbi Example"""
