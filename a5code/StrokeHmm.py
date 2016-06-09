@@ -1,4 +1,11 @@
-#Added example, label, and spit out matrix function
+# File: StrokeHmm.py
+# Members and netids:
+# Chung Ho Lee, chl433
+# Edward Hu, ehe839
+# Atul Adhikari, aca089
+
+# Date: 6/8/2016
+# Group work statement: All group members were present and contributing during all work on this project
 
 import xml.dom.minidom
 import copy
@@ -130,27 +137,31 @@ class HMM:
         ''' Find the most likely labels for the sequence of data
             This is an implementation of the Viterbi algorithm  '''
 
-        seq= {} # dictionary of sequences of stroke states
-        prob_dict= {} # dictionary of state probabilities 
         label = "" # initialize
         labels = [] # array of label return values 
+        leng=len(data)
+        seq= {} # dictionary of sequences of stroke states
+        prob_dict= {} # dictionary of state probabilities 
+        i=1 #initialize i
 
-        for i in range(len(data)): # repeat for each stroke and each dictionary 
+        diction = data[0] 
+        seq.update({0:{}})
+        for state in self.states: # for every recorded state
+            probab = 1.0   
+            probability_state = self.priors[state] 
+            for feature_name in self.featureNames: # for every feature
+                fea= diction[feature_name] # probabilities of a feature
+                prob_state_extra = self.emissions[state][feature_name][fea]
+                probab = probab * prob_state_extra
+            probab = probab * probability_state # multiply by probability_state
+            new_e = {state:probab} # new entry
+            prob_dict.update(new_e) # update probabilities
+
+        while i<leng: # while i is less than length
             diction = data[i] 
             seq.update({i:{}}) # for every stroke create a dictionary
 
-            if i == 0: # if first
-                for state in self.states: # for every recorded state
-                    probab = 1.0   
-                    probability_state = self.priors[state] 
-                    for feature_name in self.featureNames: # for every feature
-                        fea= diction[feature_name] # probabilities of a feature
-                        prob_state_extra = self.emissions[state][feature_name][fea]
-                        probab = probab * prob_state_extra
-                    probab = probab * probability_state # multiply by probability_state
-                    new_e = {state:probab} # new entry
-                    prob_dict.update(new_e) # update probabilities
-            else: 
+            if i != 0: 
                 new_prob = {} # updated probabilities dictionary
                 for state in self.states: # iterate through all states
                     max_record = {} # for every state, record maximum probability
@@ -170,11 +181,13 @@ class HMM:
                     new_prob.update({state:maximum_prob}) # update probability dictionary
                     seq[i].update({state:maximum_state}) # update sequence and possibly add
                 prob_dict = copy.deepcopy(new_prob)
+
+            i+=1 #increment i
             
         label = max(prob_dict, key=prob_dict.get) # very last label
         labels.append(label) # add label to the list of labels
 
-        for timestep in range(len(data)-1,0,-1): # iterate through each stroke
+        for timestep in range(leng-1,0,-1): # iterate through each stroke
             labels.insert(0,seq[timestep][label]) # find previous label
             label = seq[timestep][label] # update label to make it the previous state
         return labels
@@ -234,25 +247,23 @@ class StrokeLabeler:
         d_t = 0
         t_t = 0
         t_d = 0
+        #initialize the variables
 
         for i in range(len(trueLabels)):
             if trueLabels[i] == "drawing":
                 if classifications[i] == "drawing":
-                    d_d += 1
+                    d_d = d_d + 1 #add to d_d count
                 if classifications[i] == "text":
-                    d_t += 1
+                    d_t = d_t + 1 #add to d_t count
             if trueLabels[i] == "text":
                 if classifications[i] == "text":
-                    t_t += 1
+                    t_t = t_t + 1 #add to t_t count
                 if classifications[i] == "drawing":
-                    t_d += 1
+                    t_d = t_d + 1 #add to t_d count
 
-        dict_final = {
-                    'drawing': {'drawing': d_d, 'text': d_t}, 
-                    'text': {'drawing': t_d, 'text': t_t}
-                    }
+        dict_final = {'drawing': {'drawing': d_d, 'text': d_t}, 'text': {'drawing': t_d, 'text': t_t}} #make final dictionary
 
-        return dict_final
+        return dict_final #return final dictionary
 
     def featurefy( self, strokes ):
         ''' Converts the list of strokes into a list of feature dictionaries
@@ -285,23 +296,28 @@ class StrokeLabeler:
             for p in pointList: #Append all points
                 x_list.append(p[0])
                 y_list.append(p[1])
+            #initialize and append all the points
 
             x_max = max(x_list)*1.0
             x_min = min(x_list)*1.0
             y_max = max(y_list)*1.0
             y_min = min(y_list)*1.0
+            #Find the max and min coordinates
             area = (x_max - x_min) * (y_max - y_min)
             ratio = (y_max - y_min) / (x_max - x_min+0.000001)
+            #Calculate the area and the ratio
 
             if area < 10000:
                 d['area'] = 0
             else:
                 d['area'] = 1
+            #Classify area
 
             if ratio < 1.25:
                 d['ratio'] = 0
             else:
                 d['ratio'] = 1
+            #Classify ratio
 
             l = s.length()
 
@@ -309,6 +325,7 @@ class StrokeLabeler:
                 d['length'] = 0
             else:
                 d['length'] = 1
+            #Classify length
 
             c = s.sumOfCurvature()
 
@@ -316,9 +333,7 @@ class StrokeLabeler:
                 d['curvature']=0
             else:
                 d['curvature']=1
-
-            print "area:"+str(area)
-            print "ratio:"+str(ratio)
+            #Classify curvature
 
             # We can add more features here just by adding them to the dictionary
             # d as we did with length.  Remember that when you add features,
@@ -658,19 +673,19 @@ class Stroke:
     # Features are defined internally within the featurefy function, not externally as a separate function. 
     # We implemented area, ratio, and curvature for our different features
 
-def ViterbiExample():
-    """ Part 1 Viterbi Example"""
+# def ViterbiTest():
+#     """Part 1 Viterbi Testing Example"""
 
-    stateDesc = ['sunny','cloudy','rainy']
-    featureGS = ['condition']
-    numValues = { 'condition': 3 }
+#     stateDesc = ['sunny','cloudy','rainy'] # 3 states
+#     featureGS = ['condition'] # condition name
+#     numValues = {'condition': 3 } # number of condition/states
+#     prob_state = HMM(stateDesc, featureGS, 0, numValues) #initialize
+#     prob_state.priors = {'sunny': 0.63, 'cloudy': 0.17, 'rainy': 0.2} #probability states
+#     prob_state.emissions = {'sunny':{'condition': [0.6,0.15,0.05]}, 'cloudy':{'condition': [0.25,0.25,0.25]}, 'rainy':{'condition': [0.05,0.35,0.5]}}
+#     # prior probabilities
+#     prob_state.transitions = {'sunny':{'sunny':0.5 ,'cloudy':0.25 ,'rainy':0.25 },'cloudy':{'sunny':0.375 ,'cloudy':0.125 ,'rainy':0.375 }, 'rainy':{'sunny':0.125 ,'cloudy':0.675 ,'rainy':0.375 }}
+#     # prior probabilities
+#     observed = [ {'condition':0}, {'condition':1}, {'condition':2}] #What we see as evidence
 
-    prob_state = HMM(stateDesc, featureGS, 0, numValues)
-
-    prob_state.priors = {'sunny': 0.63, 'cloudy': 0.17, 'rainy': 0.2}
-    prob_state.emissions = {'sunny':{'condition': [0.6,0.15,0.05]}, 'cloudy':{'condition': [0.25,0.25,0.25]}, 'rainy':{'condition': [0.05,0.35,0.5]}}
-    prob_state.transitions = {'sunny':{'sunny':0.5 ,'cloudy':0.25 ,'rainy':0.25 },'cloudy':{'sunny':0.375 ,'cloudy':0.125 ,'rainy':0.375 }, 'rainy':{'sunny':0.125 ,'cloudy':0.675 ,'rainy':0.375 }}
-
-    observed = [ {'condition':0}, {'condition':1}, {'condition':2}]
-
-    print prob_state.label(observed)
+#     return prob_state.label(observed) #return most probable state
+#     # output should return (sunny, rainy, rainy)
