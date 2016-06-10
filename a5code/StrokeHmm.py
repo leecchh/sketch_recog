@@ -1,12 +1,11 @@
-#Added example, label, and spit out matrix function
-
 import xml.dom.minidom
 import copy
 import guid
 import math
 import os
+import numpy as np
+import operator
 
-# A couple contants
 CONTINUOUS = 0
 DISCRETE = 1
 
@@ -125,60 +124,82 @@ class HMM:
                     # Now we have counts of each feature and we need to normalize
                     for i in range(len(self.emissions[s][f])):
                         self.emissions[s][f][i] /= float(len(featureVals[s][f])+self.numVals[f])
+
               
     def label( self, data ):
         ''' Find the most likely labels for the sequence of data
             This is an implementation of the Viterbi algorithm  '''
 
-        seq= {} # dictionary of sequences of stroke states
-        prob_dict= {} # dictionary of state probabilities 
-        label = "" # initialize
-        labels = [] # array of label return values 
+        len_obs = len(data) #Number of observations
+        trans_matrix = self.transitions #Transition matrix
+        emission_matrix = self.emissions #Emission matrix
+        len_states = len(self.states) #Total number of states
+        all_states = self.states #States
+        all_features = self.featureNames #All features
+        prior_probs = self.priors #Prior probabilities
+        viterbi_arr = [{}] #Viterbi trellis for first observation
+        path={} #Initialize path
+        
+        #Prior probability array
+        prior_prob =[]
+        for value in self.priors.values():
+            prior_prob.append(value)
 
-        for i in range(len(data)): # repeat for each stroke and each dictionary 
-            diction = data[i] 
-            seq.update({i:{}}) # for every stroke create a dictionary
+        prior_prob = np.asarray(prior_prob).T
+         
+        viterbi_arr=[{}] #Initialize viterbi array trellis
+        #Find the probabilities for the first viterbi observation trellis using prior probabilities
+        for index in range(len_states):
+            for state in all_states:
+                for feature in all_features:
+                    evidence = emission_matrix[state][feature][data[0][feature]]
+                viterbi_arr[0][state]=prior_probs[state]*evidence
+                #viterbi entry = prior probability * evidence [first observation]
+                path[state] = [state]
+                
 
-            if i == 0: # if first
-                for state in self.states: # for every recorded state
-                    probab = 1.0   
-                    probability_state = self.priors[state] 
-                    for feature_name in self.featureNames: # for every feature
-                        fea= diction[feature_name] # probabilities of a feature
-                        prob_state_extra = self.emissions[state][feature_name][fea]
-                        probab = probab * prob_state_extra
-                    probab = probab * probability_state # multiply by probability_state
-                    new_e = {state:probab} # new entry
-                    prob_dict.update(new_e) # update probabilities
-            else: 
-                new_prob = {} # updated probabilities dictionary
-                for state in self.states: # iterate through all states
-                    max_record = {} # for every state, record maximum probability
-                    for state2 in self.states: # iterate for every state
-                        probab = 1.0  
-                        prob_prior = prob_dict[state2] 
-                        prob_transition = self.transitions[state2][state] 
-                        for feature_name in self.featureNames: # every featurename repeat
-                            fea = diction[feature_name] 
-                            prob_state_extra = self.emissions[state][feature_name][fea]
-                            probab = probab * prob_state_extra
-                        probab = probab * prob_prior * prob_transition 
-                        max_record.update({state2:probab}) # update dictionary with probability
-
-                    maximum_state = max(max_record, key=max_record.get) # choice for last state
-                    maximum_prob = max_record[maximum_state] # largest probability in dictionary
-                    new_prob.update({state:maximum_prob}) # update probability dictionary
-                    seq[i].update({state:maximum_state}) # update sequence and possibly add
-                prob_dict = copy.deepcopy(new_prob)
+        #For each observation, and each state, calculate viterbi probabilities
+        for obs_index in range(1,len_obs): #All observations
+            viterbi_arr.append({})
+            path_append={}
+            for state in all_states: #Each state in the observation
+                for feature in all_features:
+                    #Evidence calculation for given features
+                    evidence = emission_matrix[state][feature][data[obs_index][feature]]
+                #Get the max of previous viterbi entry * evidence *transition
+                temp_state=[]
+                temp_viterbi=[]
+                #Calculate the viterbi trellis entry for each state in the observation
+                for prev_state in all_states:
+                    temp_viterbi.append(viterbi_arr[obs_index-1][prev_state]*trans_matrix[prev_state][state]*evidence)
+                    temp_state.append(prev_state)
+                    
+                index = temp_viterbi.index(max(temp_viterbi))
+                #Choose the state that corresponds to the maximum probability
+                state_chosen =temp_state[index]
+                
+                #Maximum probability chosen
+                viterbi_arr[obs_index][state]=max(temp_viterbi) #Viterbi entry for that state is the max probability
+#                 print max(temp_viterbi)
+                path_append[state]=path[state_chosen]+[state] #append the path
             
-        label = max(prob_dict, key=prob_dict.get) # very last label
-        labels.append(label) # add label to the list of labels
-
-        for timestep in range(len(data)-1,0,-1): # iterate through each stroke
-            labels.insert(0,seq[timestep][label]) # find previous label
-            label = seq[timestep][label] # update label to make it the previous state
-        return labels
+            path = path_append
+            
+        #Find the final path
+        temp_array_state=[]
+        temp_array_viterbi=[]
+        #Backtrack and find the path
+        for state in all_states:
+            temp_array_viterbi.append(viterbi_arr[len(data)-1][state])
+            temp_array_state.append(state)
+        #Find the index where the max_viterbi probability is found
+        index = temp_array_viterbi.index(max(temp_array_viterbi))
+        state_final = temp_array_state[index]
     
+        
+        return path[state_final]
+
+        
     def getEmissionProb( self, state, features ):
         ''' Get P(features|state).
             Consider each feature independent so
@@ -224,35 +245,9 @@ class StrokeLabeler:
         #    name to whether it is continuous or discrete
         # numFVals is a dictionary specifying the number of legal values for
         #    each discrete feature
-        self.featureNames = ['length', 'area', 'ratio', 'curvature']
-        self.contOrDisc = {'length': DISCRETE, 'area': DISCRETE, 'ratio': DISCRETE, 'curvature': DISCRETE}
-        self.numFVals = { 'length': 2, 'area': 2, 'ratio': 2, 'curvature': 2}
-
-    def confusion(self, trueLabels, classifications):
-        """ Takes in trueLabels list and classifications, returns dictionary of how accurate estimation is """
-        d_d = 0
-        d_t = 0
-        t_t = 0
-        t_d = 0
-
-        for i in range(len(trueLabels)):
-            if trueLabels[i] == "drawing":
-                if classifications[i] == "drawing":
-                    d_d += 1
-                if classifications[i] == "text":
-                    d_t += 1
-            if trueLabels[i] == "text":
-                if classifications[i] == "text":
-                    t_t += 1
-                if classifications[i] == "drawing":
-                    t_d += 1
-
-        dict_final = {
-                    'drawing': {'drawing': d_d, 'text': d_t}, 
-                    'text': {'drawing': t_d, 'text': t_t}
-                    }
-
-        return dict_final
+        self.featureNames = ['length']
+        self.contOrDisc = {'length': DISCRETE}
+        self.numFVals = { 'length': 2}
 
     def featurefy( self, strokes ):
         ''' Converts the list of strokes into a list of feature dictionaries
@@ -279,52 +274,18 @@ class StrokeLabeler:
             # to use.  This is an important process and can be tricky.  Try
             # to use a principled approach (i.e., look at the data) rather
             # than just guessing.
-            pointList = s.points 
-            x_list = []
-            y_list = []
-            for p in pointList: #Append all points
-                x_list.append(p[0])
-                y_list.append(p[1])
-
-            x_max = max(x_list)*1.0
-            x_min = min(x_list)*1.0
-            y_max = max(y_list)*1.0
-            y_min = min(y_list)*1.0
-            area = (x_max - x_min) * (y_max - y_min)
-            ratio = (y_max - y_min) / (x_max - x_min+0.000001)
-
-            if area < 10000:
-                d['area'] = 0
-            else:
-                d['area'] = 1
-
-            if ratio < 1.25:
-                d['ratio'] = 0
-            else:
-                d['ratio'] = 1
-
             l = s.length()
-
             if l < 300:
                 d['length'] = 0
             else:
                 d['length'] = 1
-
-            c = s.sumOfCurvature()
-
-            if c<0.2:
-                d['curvature']=0
-            else:
-                d['curvature']=1
-
-            print "area:"+str(area)
-            print "ratio:"+str(ratio)
 
             # We can add more features here just by adding them to the dictionary
             # d as we did with length.  Remember that when you add features,
             # you also need to add them to the three member data structures
             # above in the contructor: self.featureNames, self.contOrDisc,
             #    self.numFVals (for discrete features only)
+
 
             ret.append(d)  # append the feature dictionary to the list
             
@@ -655,22 +616,21 @@ class Stroke:
 
         return ret / len(self.points)
 
-    # Features are defined internally within the featurefy function, not externally as a separate function. 
-    # We implemented area, ratio, and curvature for our different features
+    # You can (and should) define more features here
 
 def ViterbiExample():
     """ Part 1 Viterbi Example"""
 
-    stateDesc = ['sunny','cloudy','rainy']
-    featureGS = ['condition']
-    numValues = { 'condition': 3 }
+    states = ['sunny','cloudy','rainy']
+    featureNames = ['groundState']
+    numVals = { 'groundState': 3 }
 
-    prob_state = HMM(stateDesc, featureGS, 0, numValues)
+    x = HMM(states, featureNames, 0, numVals)
 
-    prob_state.priors = {'sunny': 0.63, 'cloudy': 0.17, 'rainy': 0.2}
-    prob_state.emissions = {'sunny':{'condition': [0.6,0.15,0.05]}, 'cloudy':{'condition': [0.25,0.25,0.25]}, 'rainy':{'condition': [0.05,0.35,0.5]}}
-    prob_state.transitions = {'sunny':{'sunny':0.5 ,'cloudy':0.25 ,'rainy':0.25 },'cloudy':{'sunny':0.375 ,'cloudy':0.125 ,'rainy':0.375 }, 'rainy':{'sunny':0.125 ,'cloudy':0.675 ,'rainy':0.375 }}
+    x.priors = {'sunny': 0.63, 'cloudy': 0.17, 'rainy': 0.2}
+    x.emissions = {'sunny':{'groundState': [0.6,0.15,0.05]}, 'cloudy':{'groundState': [0.25,0.25,0.25]}, 'rainy':{'groundState': [0.05,0.35,0.5]}}
+    x.transitions = {'sunny':{'sunny':0.5 ,'cloudy':0.25 ,'rainy':0.25 },'cloudy':{'sunny':0.375 ,'cloudy':0.125 ,'rainy':0.375 }, 'rainy':{'sunny':0.125 ,'cloudy':0.675 ,'rainy':0.375 }}
 
-    observed = [ {'condition':0}, {'condition':1}, {'condition':2}]
+    observed = [ {'groundState':0}, {'groundState':1}, {'groundState':2}]
 
-    print prob_state.label(observed)
+    print x.label(observed)
